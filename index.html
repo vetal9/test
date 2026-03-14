@@ -540,6 +540,55 @@ body::before {
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+/* ACHIEVEMENTS */
+.ach-section-title {
+  font-family: 'Orbitron', monospace; font-size: 9px; letter-spacing: 3px;
+  color: var(--muted); margin: 16px 0 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.ach-section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+.streak-card {
+  background: var(--card); border: 1px solid rgba(255,184,0,0.3);
+  border-radius: 16px; padding: 16px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 14px;
+  position: relative; overflow: hidden;
+}
+.streak-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background: linear-gradient(90deg, transparent, #ffb800, transparent);
+}
+.streak-flame { font-size: 40px; line-height: 1; }
+.streak-info { flex: 1; }
+.streak-num {
+  font-family: 'Orbitron', monospace; font-size: 36px; font-weight: 900;
+  color: #ffb800; text-shadow: 0 0 20px rgba(255,184,0,0.4); line-height: 1;
+}
+.streak-lbl { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 3px; }
+.streak-best { text-align: right; font-family: 'Orbitron', monospace; font-size: 11px; color: var(--muted); }
+.streak-best span { display: block; font-size: 18px; font-weight: 900; color: var(--text); }
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.ach-item {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 14px 12px; text-align: center;
+  position: relative; overflow: hidden; transition: border-color 0.3s;
+}
+.ach-item.unlocked { border-color: rgba(var(--app-rgb), 0.4); }
+.ach-item.unlocked::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent, var(--app), transparent);
+}
+.ach-item.locked { opacity: 0.45; }
+.ach-ico { font-size: 28px; margin-bottom: 6px; }
+.ach-name { font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--text); margin-bottom: 4px; }
+.ach-desc { font-size: 10px; color: var(--muted); font-weight: 600; line-height: 1.4; }
+.ach-prog { margin-top: 8px; height: 3px; background: var(--surface); border-radius: 99px; overflow: hidden; }
+.ach-prog-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--app), rgba(var(--app-rgb),0.5)); transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1); }
+.ach-item.unlocked .ach-prog-fill { background: var(--app); }
+.record-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.record-row:last-child { border-bottom: none; }
+.record-lbl { font-size: 12px; color: var(--muted); font-weight: 600; flex: 1; }
+.record-val { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; color: var(--text); }
+
 /* WEATHER BLOCK */
 .wx-card {
   background: var(--card); border: 1px solid var(--border);
@@ -855,6 +904,9 @@ body::before {
   <button class="bn-btn" id="bn-history" onclick="showTab('history')">
     <div class="bn-ico">🗓️</div><div class="bn-lbl">ИСТОРИЯ</div>
   </button>
+  <button class="bn-btn" id="bn-ach" onclick="showTab('ach')">
+    <div class="bn-ico">🏆</div><div class="bn-lbl">ТРОФЕИ</div>
+  </button>
 </div>
 
 <!-- TAB: ЗАРАБОТОК -->
@@ -971,6 +1023,19 @@ body::before {
       <div class="hist-loading"><div class="hist-spinner"></div>ЗАГРУЗКА...</div>
     </div>
   </div>
+</div>
+</div>
+
+<!-- TAB: ТРОФЕИ -->
+<div class="pg" id="pg-ach">
+<div class="content" style="padding-top:14px;">
+  <div id="ach-streak-wrap"></div>
+  <div class="ach-section-title">РЕКОРДЫ</div>
+  <div class="card" style="margin-bottom:10px;">
+    <div id="ach-records"></div>
+  </div>
+  <div class="ach-section-title">ДОСТИЖЕНИЯ</div>
+  <div class="ach-grid" id="ach-grid"></div>
 </div>
 </div>
 
@@ -1549,16 +1614,109 @@ function showTab(t){
   document.getElementById('pg-earn').classList.toggle('active',t==='earn');
   document.getElementById('pg-orders').classList.toggle('active',t==='orders');
   document.getElementById('pg-history').classList.toggle('active',t==='history');
+  document.getElementById('pg-ach').classList.toggle('active',t==='ach');
   document.getElementById('bn-earn').classList.toggle('active',t==='earn');
   document.getElementById('bn-orders').classList.toggle('active',t==='orders');
   document.getElementById('bn-history').classList.toggle('active',t==='history');
+  document.getElementById('bn-ach').classList.toggle('active',t==='ach');
   if(t==='history') loadHistory();
+  if(t==='ach') renderAchievements();
 }
 
 // ── DRAWER ──
 function openDrawer(){ document.getElementById('drawer').classList.add('open'); document.getElementById('d-overlay').classList.add('open'); }
 function closeDrawer(){ document.getElementById('drawer').classList.remove('open'); document.getElementById('d-overlay').classList.remove('open'); }
 function drTab(t){ document.getElementById('drt-rules').classList.toggle('active',t==='rules'); document.getElementById('drt-pay').classList.toggle('active',t==='pay'); document.getElementById('drp-rules').classList.toggle('active',t==='rules'); document.getElementById('drp-pay').classList.toggle('active',t==='pay'); }
+
+// ── ДОСТИЖЕНИЯ ──
+var ACH_KEY = 'courier_ach_v1';
+
+function loadAchData(){
+  try { var r=localStorage.getItem(ACH_KEY); return r?JSON.parse(r):{}; } catch(e){ return {}; }
+}
+function saveAchData(d){ try { localStorage.setItem(ACH_KEY, JSON.stringify(d)); } catch(e){} }
+
+// Compute stats across all stored history + current week
+function computeAllStats(){
+  var totalEarnAll = weekData.reduce(function(s,d){ return s+(d.earn||0); },0);
+  var totalOrdersAll = orders.length;
+  var totalKmAll = orders.reduce(function(s,o){ return s+(o.km||0); },0);
+  var bestDay = Math.max.apply(null, weekData.map(function(d){ return d.earn||0; }).concat([0]));
+
+  // streak: count consecutive days with earn>0 up to today
+  var streak = 0;
+  for(var i = todayIdx; i >= 0; i--){
+    if(weekData[i] && weekData[i].earn > 0) streak++;
+    else break;
+  }
+
+  // load persisted ach data
+  var ad = loadAchData();
+  // update records
+  if(!ad.bestDay || bestDay > ad.bestDay) ad.bestDay = bestDay;
+  if(!ad.bestStreak || streak > ad.bestStreak) ad.bestStreak = streak;
+  ad.totalEarn = (ad.totalEarn||0) + 0; // accumulate across sessions via history
+  ad.totalOrders = (ad.totalOrders||0);
+  ad.totalKm = (ad.totalKm||0);
+  // use current week as floor
+  ad.totalEarn = Math.max(ad.totalEarn||0, totalEarnAll);
+  ad.totalOrders = Math.max(ad.totalOrders||0, totalOrdersAll);
+  ad.totalKm = Math.max(ad.totalKm||0, parseFloat(totalKmAll.toFixed(1)));
+  ad.streak = streak;
+  saveAchData(ad);
+  return ad;
+}
+
+var ACHIEVEMENTS = [
+  { id:'first_order',  ico:'🛴', name:'ПЕРВЫЙ ЗАКАЗ',   desc:'Выполни 1 заказ',          check:function(d){ return d.totalOrders>=1; },   prog:function(d){ return Math.min(d.totalOrders||0,1); }, total:1 },
+  { id:'earn_100',     ico:'💵', name:'$100 ЗАРАБОТАНО', desc:'Заработай $100 суммарно',  check:function(d){ return d.totalEarn>=100; },    prog:function(d){ return Math.min(d.totalEarn||0,100); }, total:100 },
+  { id:'earn_500',     ico:'💰', name:'$500 КЛУБ',       desc:'Заработай $500 суммарно',  check:function(d){ return d.totalEarn>=500; },    prog:function(d){ return Math.min(d.totalEarn||0,500); }, total:500 },
+  { id:'earn_1000',    ico:'🤑', name:'$1000 ЭЛИТА',     desc:'Заработай $1000 суммарно', check:function(d){ return d.totalEarn>=1000; },   prog:function(d){ return Math.min(d.totalEarn||0,1000); }, total:1000 },
+  { id:'orders_10',    ico:'📦', name:'10 ЗАКАЗОВ',      desc:'Выполни 10 заказов',       check:function(d){ return d.totalOrders>=10; },   prog:function(d){ return Math.min(d.totalOrders||0,10); }, total:10 },
+  { id:'orders_50',    ico:'🚀', name:'50 ЗАКАЗОВ',      desc:'Выполни 50 заказов',       check:function(d){ return d.totalOrders>=50; },   prog:function(d){ return Math.min(d.totalOrders||0,50); }, total:50 },
+  { id:'km_100',       ico:'🛣️', name:'100 КМ',          desc:'Проедь 100 км суммарно',   check:function(d){ return d.totalKm>=100; },      prog:function(d){ return Math.min(d.totalKm||0,100); }, total:100 },
+  { id:'streak_3',     ico:'🔥', name:'3 ДНЯ ПОДРЯД',   desc:'Работай 3 дня подряд',     check:function(d){ return (d.bestStreak||0)>=3; }, prog:function(d){ return Math.min(d.bestStreak||0,3); }, total:3 },
+  { id:'streak_7',     ico:'⚡', name:'НЕДЕЛЯ ПОДРЯД',  desc:'Работай 7 дней подряд',    check:function(d){ return (d.bestStreak||0)>=7; }, prog:function(d){ return Math.min(d.bestStreak||0,7); }, total:7 },
+  { id:'best_200',     ico:'👑', name:'$200 ДЕНЬ',       desc:'Заработай $200 за день',   check:function(d){ return (d.bestDay||0)>=200; },  prog:function(d){ return Math.min(d.bestDay||0,200); }, total:200 },
+];
+
+function renderAchievements(){
+  var ad = computeAllStats();
+
+  // Streak card
+  var sFlame = ad.streak>=7?'⚡':ad.streak>=3?'🔥':'🌱';
+  document.getElementById('ach-streak-wrap').innerHTML =
+    '<div class="streak-card">'
+    +'<div class="streak-flame">'+sFlame+'</div>'
+    +'<div class="streak-info">'
+    +  '<div class="streak-num">'+( ad.streak||0)+'</div>'
+    +  '<div class="streak-lbl">дней подряд сейчас</div>'
+    +'</div>'
+    +'<div class="streak-best">РЕКОРД<span>'+(ad.bestStreak||0)+' дн</span></div>'
+    +'</div>';
+
+  // Records
+  document.getElementById('ach-records').innerHTML =
+    '<div class="record-row"><span class="record-lbl">🏆 Лучший день</span><span class="record-val">$'+(ad.bestDay||0).toFixed(0)+'</span></div>'
+   +'<div class="record-row"><span class="record-lbl">💰 Всего заработано</span><span class="record-val">$'+(ad.totalEarn||0).toFixed(0)+'</span></div>'
+   +'<div class="record-row"><span class="record-lbl">📦 Всего заказов</span><span class="record-val">'+(ad.totalOrders||0)+'</span></div>'
+   +'<div class="record-row"><span class="record-lbl">🛣️ Всего километров</span><span class="record-val">'+(ad.totalKm||0)+' км</span></div>';
+
+  // Achievements grid
+  var html = '';
+  ACHIEVEMENTS.forEach(function(a){
+    var unlocked = a.check(ad);
+    var prog = a.prog(ad);
+    var pct = Math.round(prog / a.total * 100);
+    html += '<div class="ach-item '+(unlocked?'unlocked':'locked')+'">'
+      +'<div class="ach-ico">'+a.ico+'</div>'
+      +'<div class="ach-name">'+a.name+'</div>'
+      +'<div class="ach-desc">'+a.desc+'</div>'
+      +'<div class="ach-prog"><div class="ach-prog-fill" style="width:'+pct+'%"></div></div>'
+      +'</div>';
+  });
+  document.getElementById('ach-grid').innerHTML = html;
+}
 
 // ── INIT ──
 buildDayRows();
