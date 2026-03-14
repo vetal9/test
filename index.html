@@ -539,6 +539,67 @@ body::before {
 
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* HISTORY TAB */
+.hw-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 14px 16px; margin-bottom: 10px;
+  position: relative; overflow: hidden; cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.hw-card:active { transform: scale(0.98); }
+.hw-card::before {
+  content: ''; position: absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--app-rgb),0.25), transparent);
+}
+.hw-card.expanded { border-color: rgba(var(--app-rgb),0.35); }
+.hw-head { display: flex; align-items: center; justify-content: space-between; }
+.hw-week-label {
+  font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; color: var(--muted);
+}
+.hw-week-label.current { color: var(--app); }
+.hw-earn {
+  font-family: 'Orbitron', monospace; font-size: 22px; font-weight: 900;
+  color: var(--text); line-height: 1;
+}
+.hw-meta { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 3px; }
+.hw-chevron {
+  font-size: 14px; color: var(--muted);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  flex-shrink: 0;
+}
+.hw-card.expanded .hw-chevron { transform: rotate(180deg); color: var(--app); }
+.hw-detail {
+  overflow: hidden; max-height: 0;
+  transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.25s;
+  opacity: 0;
+}
+.hw-card.expanded .hw-detail { max-height: 300px; opacity: 1; }
+.hw-sep { height: 1px; background: var(--border); margin: 12px 0; }
+.hw-mini-chart { display: flex; align-items: flex-end; gap: 5px; height: 44px; margin-bottom: 10px; }
+.hw-bar-w { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.hw-bar-o { width:100%; background:var(--surface); border-radius:4px 4px 0 0; position:relative; overflow:hidden; }
+.hw-bar-i { position:absolute; bottom:0; left:0; right:0; border-radius:4px 4px 0 0; background: linear-gradient(180deg, var(--app) 0%, rgba(var(--app-rgb),0.3) 100%); }
+.hw-bar-l { font-size:8px; color:var(--muted); font-weight:600; }
+.hw-stats3 { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.hw-st { text-align:center; }
+.hw-st-v { font-family:'Orbitron',monospace; font-size:14px; font-weight:700; color:var(--text); }
+.hw-st-l { font-size:9px; color:var(--muted); font-weight:700; letter-spacing:0.8px; margin-top:2px; text-transform:uppercase; }
+
+.hist-empty { text-align:center; padding:48px 24px; color:var(--muted); font-size:13px; font-weight:500; }
+.hist-loading {
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  padding: 40px 0; color: var(--muted);
+  font-family:'Orbitron',monospace; font-size:10px; letter-spacing:2px;
+}
+.hist-spinner { width:16px; height:16px; border-radius:50%; border:2px solid rgba(var(--app-rgb),0.2); border-top-color:var(--app); animation:spin 0.7s linear infinite; }
+
+.hw-badge {
+  font-family:'Orbitron',monospace; font-size:8px; font-weight:700;
+  padding:3px 7px; border-radius:6px; letter-spacing:0.5px;
+  background:rgba(var(--app-rgb),0.1); color:var(--app); border:1px solid rgba(var(--app-rgb),0.25);
+}
 </style>
 </head>
 <body>
@@ -746,6 +807,9 @@ body::before {
   <button class="bn-btn" id="bn-orders" onclick="showTab('orders')">
     <div class="bn-ico">📋</div><div class="bn-lbl">ЗАКАЗЫ</div>
   </button>
+  <button class="bn-btn" id="bn-history" onclick="showTab('history')">
+    <div class="bn-ico">🗓️</div><div class="bn-lbl">ИСТОРИЯ</div>
+  </button>
 </div>
 
 <!-- TAB: ЗАРАБОТОК -->
@@ -841,6 +905,18 @@ body::before {
       <button class="io-btn imp" onclick="document.getElementById('import-file').click()"><span class="io-ico">📥</span>ИМПОРТ</button>
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+  </div>
+</div>
+</div>
+
+<!-- TAB: ИСТОРИЯ -->
+<div class="pg" id="pg-history">
+<div class="content">
+  <div style="padding:14px 0 4px;">
+    <div style="font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;color:var(--muted);margin-bottom:12px;">// ИСТОРИЯ НЕДЕЛЬ</div>
+    <div id="hist-list">
+      <div class="hist-loading"><div class="hist-spinner"></div>ЗАГРУЗКА...</div>
+    </div>
   </div>
 </div>
 </div>
@@ -1059,6 +1135,89 @@ async function clearAll(){
   }
 }
 
+// ── HISTORY ──
+var histLoaded = false;
+var histExpanded = {};
+
+function getWeekLabel(wy){
+  // wy = "2025-W10"
+  try {
+    var parts = wy.split('-W');
+    var year = parseInt(parts[0]), week = parseInt(parts[1]);
+    // Get Monday of that ISO week
+    var jan4 = new Date(year, 0, 4);
+    var dayOfWeek = (jan4.getDay() + 6) % 7;
+    var monday = new Date(jan4);
+    monday.setDate(jan4.getDate() - dayOfWeek + (week - 1) * 7);
+    var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    var fmt = function(d){ return d.getDate() + ' ' + ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'][d.getMonth()]; };
+    return fmt(monday) + ' — ' + fmt(sunday);
+  } catch(e){ return wy; }
+}
+
+async function loadHistory(){
+  if(!sb){ document.getElementById('hist-list').innerHTML='<div class="hist-empty">Нет подключения к облаку</div>'; return; }
+  document.getElementById('hist-list').innerHTML='<div class="hist-loading"><div class="hist-spinner"></div>ЗАГРУЗКА...</div>';
+  try {
+    var {data, error} = await sb.from('week_data').select('*').eq('courier_id', COURIER_ID).order('week_year', {ascending: false}).limit(20);
+    if(error) throw error;
+    if(!data || !data.length){ document.getElementById('hist-list').innerHTML='<div class="hist-empty">Данных пока нет.<br>Работай — история появится!</div>'; return; }
+    var curWk = getWeekYear();
+    var html = '';
+    data.forEach(function(row){
+      var wd = row.data || [];
+      var totalEarn = wd.reduce(function(s,d){ return s + (d.earn||0); }, 0);
+      var totalHours = wd.reduce(function(s,d){ return s + (d.hours||0); }, 0);
+      var activeDays = wd.filter(function(d){ return d.earn > 0; }).length;
+      var perHour = totalHours > 0 ? (totalEarn / totalHours).toFixed(0) : '—';
+      var isCur = row.week_year === curWk;
+      var maxEarn = Math.max.apply(null, wd.map(function(d){ return d.earn||0; }).concat([1]));
+      var miniChart = '';
+      var DLBLS = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];
+      for(var i=0;i<7;i++){
+        var earn = wd[i] ? (wd[i].earn||0) : 0;
+        var h = earn > 0 ? Math.max(earn/maxEarn*100, 8) : 0;
+        miniChart += '<div class="hw-bar-w">'
+          + '<div class="hw-bar-o" style="height:34px;"><div class="hw-bar-i" style="height:'+h+'%;"></div></div>'
+          + '<div class="hw-bar-l">'+DLBLS[i]+'</div>'
+          + '</div>';
+      }
+      html += '<div class="hw-card" id="hwc-'+row.week_year+'" onclick="toggleHW(\''+row.week_year+'\')">'
+        + '<div class="hw-head">'
+        +   '<div>'
+        +     '<div class="hw-week-label'+(isCur?' current':'')+'">'+row.week_year+(isCur?' <span class="hw-badge">СЕЙЧАС</span>':'')+'</div>'
+        +     '<div style="font-size:11px;color:var(--muted);font-weight:500;margin-top:2px;">'+getWeekLabel(row.week_year)+'</div>'
+        +   '</div>'
+        +   '<div style="text-align:right;">'
+        +     '<div class="hw-earn">$'+totalEarn.toFixed(0)+'</div>'
+        +     '<div class="hw-meta">'+activeDays+' дн · '+totalHours.toFixed(1)+' ч</div>'
+        +   '</div>'
+        +   '<div class="hw-chevron">▾</div>'
+        + '</div>'
+        + '<div class="hw-detail">'
+        +   '<div class="hw-sep"></div>'
+        +   '<div class="hw-mini-chart">'+miniChart+'</div>'
+        +   '<div class="hw-stats3">'
+        +     '<div class="hw-st"><div class="hw-st-v">'+(activeDays>0?'$'+(totalEarn/activeDays).toFixed(0):'—')+'</div><div class="hw-st-l">Ср/день</div></div>'
+        +     '<div class="hw-st"><div class="hw-st-v">'+(perHour==='—'?'—':'$'+perHour)+'</div><div class="hw-st-l">$/час</div></div>'
+        +     '<div class="hw-st"><div class="hw-st-v">'+(row.skipped||0)+'</div><div class="hw-st-l">Пропуск.</div></div>'
+        +   '</div>'
+        + '</div>'
+        + '</div>';
+    });
+    document.getElementById('hist-list').innerHTML = html;
+  } catch(err){
+    console.warn('loadHistory:', err);
+    document.getElementById('hist-list').innerHTML='<div class="hist-empty">Ошибка загрузки 😕</div>';
+  }
+}
+
+function toggleHW(wy){
+  var card = document.getElementById('hwc-'+wy);
+  if(!card) return;
+  card.classList.toggle('expanded');
+}
+
 // ── PERIOD ──
 function setPeriod(p){ earnPeriod=p; document.getElementById('ep-week').classList.toggle('active',p==='week'); document.getElementById('ep-month').classList.toggle('active',p==='month'); renderStats(); }
 
@@ -1215,7 +1374,15 @@ function syncInputs(){
 }
 
 // ── TABS ──
-function showTab(t){ document.getElementById('pg-earn').classList.toggle('active',t==='earn'); document.getElementById('pg-orders').classList.toggle('active',t==='orders'); document.getElementById('bn-earn').classList.toggle('active',t==='earn'); document.getElementById('bn-orders').classList.toggle('active',t==='orders'); }
+function showTab(t){
+  document.getElementById('pg-earn').classList.toggle('active',t==='earn');
+  document.getElementById('pg-orders').classList.toggle('active',t==='orders');
+  document.getElementById('pg-history').classList.toggle('active',t==='history');
+  document.getElementById('bn-earn').classList.toggle('active',t==='earn');
+  document.getElementById('bn-orders').classList.toggle('active',t==='orders');
+  document.getElementById('bn-history').classList.toggle('active',t==='history');
+  if(t==='history') loadHistory();
+}
 
 // ── DRAWER ──
 function openDrawer(){ document.getElementById('drawer').classList.add('open'); document.getElementById('d-overlay').classList.add('open'); }
