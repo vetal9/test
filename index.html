@@ -540,7 +540,52 @@ body::before {
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-/* HISTORY TAB */
+/* WEATHER BLOCK */
+.wx-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 14px 16px; margin-bottom: 10px;
+  position: relative; overflow: hidden;
+}
+.wx-card::before {
+  content: ''; position: absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent, rgba(99,179,237,0.4), transparent);
+}
+.wx-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.wx-left { display: flex; align-items: center; gap: 10px; }
+.wx-icon { font-size: 36px; line-height: 1; }
+.wx-temp {
+  font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900; color: var(--text); line-height: 1;
+}
+.wx-desc { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 3px; }
+.wx-right { text-align: right; }
+.wx-feels { font-size: 11px; color: var(--muted); font-weight: 600; }
+.wx-wind { font-family: 'Orbitron', monospace; font-size: 11px; color: var(--muted); margin-top: 3px; }
+.wx-advice {
+  background: var(--surface); border-radius: 10px; padding: 10px 12px;
+  font-size: 12px; font-weight: 600; line-height: 1.5;
+  border-left: 3px solid var(--app); color: var(--text);
+}
+.wx-advice.warn { border-left-color: var(--warn); }
+.wx-advice.bad  { border-left-color: var(--bad); }
+.wx-hours { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px; }
+.wx-hours::-webkit-scrollbar { display: none; }
+.wx-hr {
+  flex-shrink: 0; text-align: center; padding: 8px 10px;
+  background: var(--surface); border-radius: 10px;
+  border: 1px solid var(--border); min-width: 52px;
+  transition: border-color 0.2s;
+}
+.wx-hr.hot  { border-color: rgba(0,255,136,0.4); background: rgba(0,255,136,0.05); }
+.wx-hr.warm { border-color: rgba(255,184,0,0.3); background: rgba(255,184,0,0.04); }
+.wx-hr-time { font-family: 'Orbitron', monospace; font-size: 9px; color: var(--muted); font-weight: 700; }
+.wx-hr-ico  { font-size: 16px; margin: 3px 0; }
+.wx-hr-t    { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; color: var(--text); }
+.wx-hr-rate { font-size: 9px; font-weight: 700; color: var(--muted); margin-top: 2px; }
+.wx-hr.hot  .wx-hr-rate { color: var(--app); }
+.wx-hr.warm .wx-hr-rate { color: var(--warn); }
+.wx-loading { text-align: center; padding: 20px; color: var(--muted); font-family: 'Orbitron', monospace; font-size: 10px; letter-spacing: 2px; }
+.wx-refresh { float: right; background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 0; line-height: 1; }
+.wx-refresh:active { transform: rotate(180deg); transition: transform 0.3s; }
 .hw-card {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 16px; padding: 14px 16px; margin-bottom: 10px;
@@ -824,6 +869,15 @@ body::before {
     <div class="earn-label" id="earn-label">// ЭТА НЕДЕЛЯ</div>
     <div class="earn-total" id="earn-total">$0</div>
     <div class="earn-sub" id="earn-sub">0 дней · 0 ч</div>
+  </div>
+
+  <!-- ПОГОДА -->
+  <div class="wx-card" id="wx-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="clabel" style="margin:0;">// ПОГОДА · МОНРЕАЛЬ</div>
+      <button class="wx-refresh" onclick="loadWeather(true)" title="Обновить">↻</button>
+    </div>
+    <div id="wx-body"><div class="wx-loading">ЗАГРУЗКА...</div></div>
   </div>
 
   <!-- ЦЕЛЬ НА ДЕНЬ -->
@@ -1217,6 +1271,126 @@ function toggleHW(wy){
   card.classList.toggle('expanded');
 }
 
+// ── ПОГОДА ──
+var wxCache = null, wxCacheTime = 0;
+var MTL_LAT = 45.5017, MTL_LON = -73.5673;
+
+var WX_ICONS = {
+  0:'☀️',1:'☀️',2:'⛅',3:'☁️',
+  45:'🌫️',48:'🌫️',
+  51:'🌦️',53:'🌦️',55:'🌧️',
+  61:'🌧️',63:'🌧️',65:'🌧️',
+  71:'🌨️',73:'🌨️',75:'❄️',77:'🌨️',
+  80:'🌦️',81:'🌧️',82:'⛈️',
+  85:'🌨️',86:'❄️',
+  95:'⛈️',96:'⛈️',99:'⛈️'
+};
+var WX_DESC = {
+  0:'Ясно',1:'Преимущественно ясно',2:'Переменная облачность',3:'Пасмурно',
+  45:'Туман',48:'Изморозь',
+  51:'Небольшая морось',53:'Морось',55:'Сильная морось',
+  61:'Небольшой дождь',63:'Дождь',65:'Сильный дождь',
+  71:'Небольшой снег',73:'Снег',75:'Сильный снег',77:'Снежная крупа',
+  80:'Ливень',81:'Сильный ливень',82:'Шквальный ливень',
+  85:'Небольшой снегопад',86:'Сильный снегопад',
+  95:'Гроза',96:'Гроза с градом',99:'Сильная гроза'
+};
+
+function wxAdvice(code, windspeed, temp){
+  var isBad = [65,75,82,86,95,96,99].indexOf(code) >= 0;
+  var isWet = [51,53,55,61,63,71,73,80,81,85].indexOf(code) >= 0;
+  var isSnow = [71,73,75,77,85,86].indexOf(code) >= 0;
+  var isWind = windspeed > 30;
+  var isCold = temp < -10;
+  var isHot = (code <= 2) && temp > 20;
+
+  if(isBad)   return {cls:'bad',  txt:'⛈️ Опасная погода — рекомендуем не выезжать. Если едешь, бери только $1.60+/км'};
+  if(isSnow)  return {cls:'warn', txt:'❄️ Снег — надень слои, проверь шины. Требуй $1.50+/км, заказов будет больше'};
+  if(isWet)   return {cls:'warn', txt:'🌧️ Дождь = больше заказов. Минимум $1.40+/км. Возьми дождевик!'};
+  if(isWind)  return {cls:'warn', txt:'💨 Сильный ветер ' + windspeed + ' км/ч — держи скутер устойчиво'};
+  if(isCold)  return {cls:'warn', txt:'🥶 Очень холодно. Работай короткими сессиями, грейся каждые 45 мин'};
+  if(isHot)   return {cls:'good', txt:'☀️ Отличная погода! Пик заказов вечером. Стандартный фильтр $1.20+/км'};
+  return {cls:'good', txt:'✅ Нормальная погода для работы. Фокус на Plateau / Mile End вечером'};
+}
+
+function wxHourScore(code, temp, wind){
+  // score 0-2: 0=normal, 1=warm(good), 2=hot(best)
+  var isBad = [65,75,82,86,95,96,99].indexOf(code) >= 0;
+  if(isBad) return 0;
+  var isWet = [51,53,55,61,63,71,73,80,81,85].indexOf(code) >= 0;
+  if(isWet) return 2; // rain = bonus orders
+  if(temp >= 5 && temp <= 28 && wind < 25 && code <= 3) return 2;
+  if(code <= 3 || temp > 0) return 1;
+  return 0;
+}
+
+async function loadWeather(force){
+  var now = Date.now();
+  if(!force && wxCache && (now - wxCacheTime) < 30*60*1000){
+    renderWeather(wxCache); return;
+  }
+  document.getElementById('wx-body').innerHTML = '<div class="wx-loading">ЗАГРУЗКА...</div>';
+  try {
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude='+MTL_LAT+'&longitude='+MTL_LON
+      +'&current=temperature_2m,apparent_temperature,weathercode,windspeed_10m'
+      +'&hourly=temperature_2m,weathercode,windspeed_10m&timezone=America%2FToronto&forecast_days=1';
+    var res = await fetch(url);
+    var data = await res.json();
+    wxCache = data; wxCacheTime = now;
+    renderWeather(data);
+  } catch(e){
+    document.getElementById('wx-body').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">Нет соединения 😕</div>';
+  }
+}
+
+function renderWeather(data){
+  var c = data.current;
+  var temp = Math.round(c.temperature_2m);
+  var feels = Math.round(c.apparent_temperature);
+  var code = c.weathercode;
+  var wind = Math.round(c.windspeed_10m);
+  var icon = WX_ICONS[code] || '🌡️';
+  var desc = WX_DESC[code] || '';
+  var adv = wxAdvice(code, wind, temp);
+
+  // hourly — next 8 hours from now
+  var nowH = new Date().getHours();
+  var hours = data.hourly;
+  var hrHtml = '';
+  var shown = 0;
+  for(var i = 0; i < hours.time.length && shown < 8; i++){
+    var hh = parseInt(hours.time[i].split('T')[1]);
+    if(hh < nowH) continue;
+    var ht = Math.round(hours.temperature_2m[i]);
+    var hcode = hours.weathercode[i];
+    var hwind = Math.round(hours.windspeed_10m[i]);
+    var score = wxHourScore(hcode, ht, hwind);
+    var cls = score===2?'hot':score===1?'warm':'';
+    var rateHint = score===2?'🔥 ТОП':score===1?'✓ ОК':'';
+    hrHtml += '<div class="wx-hr '+cls+'">'
+      +'<div class="wx-hr-time">'+String(hh).padStart(2,'0')+':00</div>'
+      +'<div class="wx-hr-ico">'+(WX_ICONS[hcode]||'🌡️')+'</div>'
+      +'<div class="wx-hr-t">'+ht+'°</div>'
+      +'<div class="wx-hr-rate">'+rateHint+'</div>'
+      +'</div>';
+    shown++;
+  }
+
+  document.getElementById('wx-body').innerHTML =
+    '<div class="wx-top">'
+    +'<div class="wx-left">'
+    +  '<div class="wx-icon">'+icon+'</div>'
+    +  '<div><div class="wx-temp">'+temp+'°C</div><div class="wx-desc">'+desc+'</div></div>'
+    +'</div>'
+    +'<div class="wx-right">'
+    +  '<div class="wx-feels">Ощущается '+feels+'°</div>'
+    +  '<div class="wx-wind">💨 '+wind+' км/ч</div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="wx-advice '+adv.cls+'">'+adv.txt+'</div>'
+    +(hrHtml ? '<div class="wx-hours">'+hrHtml+'</div>' : '');
+}
+
 // ── PERIOD ──
 function setPeriod(p){ earnPeriod=p; document.getElementById('ep-week').classList.toggle('active',p==='week'); document.getElementById('ep-month').classList.toggle('active',p==='month'); renderStats(); }
 
@@ -1390,6 +1564,7 @@ function drTab(t){ document.getElementById('drt-rules').classList.toggle('active
 buildDayRows();
 updateSkippedUI();
 renderAll();
+loadWeather();
 </script>
 </body>
 </html>
