@@ -1293,6 +1293,8 @@ async function resetOrders(){
 async function clearAll(){
   if(!confirm('Сбросить все данные?'))return;
   orders=[]; skipped=0; weekData=DAYS.map(()=>({earn:0,hours:0}));
+  // сброс трофеев
+  try { localStorage.removeItem(ACH_KEY); } catch(e){}
   updateSkippedUI(); saveLocal(); syncInputs(); renderAll();
   if(sb){
     setSyncDot('syncing');
